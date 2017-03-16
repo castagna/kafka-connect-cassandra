@@ -24,8 +24,8 @@ public class CachedSessionProvider {
 	private static final Logger log = LoggerFactory.getLogger(CachedSessionProvider.class);
 
 	private final String host;
-	private final String username;
-	private final String password;
+	private final String username; // TODO
+	private final String password; // TODO
 	private final Cluster cluster;
 
 	private Session session;
