@@ -173,11 +173,11 @@ public class TestCassandraJavaAPIs {
     
     @Test
     public void testLogLevels() {
-    	log.debug("I am a DEBUG level log message.");
-    	log.trace("I am a TRACE level log message.");
-    	log.info("I am a INFO level log message.");
     	log.error("I am a ERROR level log message.");
     	log.warn("I am a WARN level log message.");
+    	log.info("I am a INFO level log message.");
+    	log.debug("I am a DEBUG level log message.");
+    	log.trace("I am a TRACE level log message.");
     }
 
     private static boolean keyspaceExists (String keyspaceName) {

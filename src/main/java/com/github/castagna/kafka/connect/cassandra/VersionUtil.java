@@ -21,7 +21,8 @@ import org.slf4j.LoggerFactory;
 class VersionUtil {
 
 	  private static final Logger log = LoggerFactory.getLogger(VersionUtil.class);
-	  private static String version = "unknown";
+
+	  private static String version = "Unknown";
 
 	  static {
 	    try {

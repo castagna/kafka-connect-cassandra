@@ -40,7 +40,7 @@ public class BufferedRecords {
 	private PreparedStatement preparedStatement;
 	private CassandraPreparedStatementBinder preparedStatementBinder;
 
-	public BufferedRecords(CassandraSinkConnectorConfig config, String tableName, Session session) {
+	public BufferedRecords(CassandraSinkConnectorConfig config, String tableName, CassandraStructure cassandraStructure, Session session) {
 		this.config = config;
 		this.tableName = tableName;
 		this.session = session;

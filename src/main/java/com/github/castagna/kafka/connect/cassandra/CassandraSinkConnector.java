@@ -36,6 +36,7 @@ public class CassandraSinkConnector extends SinkConnector {
 	@Override
 	public void start(Map<String, String> properties) {
 		this.config = properties;
+		log.info("Starting Cassandra sink connector with properties:{}", properties);
 	}
 
 	@Override
@@ -44,21 +45,20 @@ public class CassandraSinkConnector extends SinkConnector {
 	}
 
 	@Override
-	  public List<Map<String, String>> taskConfigs(int maxTasks) {
+	public List<Map<String, String>> taskConfigs(int maxTasks) {
 		log.info("Setting task configurations for {} workers.", maxTasks);
-	    List<Map<String, String>> results = new ArrayList<Map<String, String>>();
+		List<Map<String, String>> results = new ArrayList<Map<String, String>>();
 
-	    for (int i = 0; i < maxTasks; i++) {
-	      results.add(config);
-	    }
+		for (int i = 0; i < maxTasks; i++) {
+			results.add(config);
+		}
 
-	    return results;
+		return results;
 	}
 
 	@Override
 	public void stop() {
-		// TODO Auto-generated method stub
-
+		log.info("Stopping Cassandra sink connector.");
 	}
 
 	@Override

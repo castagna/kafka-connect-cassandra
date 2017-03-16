@@ -13,25 +13,27 @@
  */
 package com.github.castagna.kafka.connect.cassandra.metadata;
 
+import com.datastax.driver.core.DataType;
+
 public final class TableColumn {
 
 	public final String name;
 	public final boolean isPrimaryKey;
 	public final boolean allowsNull;
-	public final int sqlType;
+	public final DataType cassandraDataType;
 
-	public TableColumn(final String name, final boolean isPrimaryKey, final boolean allowsNull, final int sqlType) {
+	public TableColumn(final String name, final boolean isPrimaryKey, final boolean allowsNull, final DataType cassandraDataType) {
 		this.name = name;
 		this.isPrimaryKey = isPrimaryKey;
 		this.allowsNull = allowsNull;
-		this.sqlType = sqlType;
+		this.cassandraDataType = cassandraDataType;
 	}
 
 	@Override
 	public String toString() {
-		return "TableColumn{" + "name='" + name + '\'' + ", " +
-				"isPrimaryKey=" + isPrimaryKey + ", allowsNull=" + allowsNull + 
-				", sqlType=" + sqlType + '}';
+		return "TableColumn{" + "name:'" + name + '\'' + ", " +
+				"isPrimaryKey:" + isPrimaryKey + ", allowsNull:" + allowsNull + 
+				", sqlType:" + cassandraDataType + '}';
 	}
 
 }

@@ -80,7 +80,8 @@ public class FieldsMetadata {
 				throw new ConnectException(
 						String.format(
 								"PK mode for table '%s' is %s, but record key schema is missing",
-								tableName, pkMode));
+								tableName, 
+								pkMode));
 			}
 			final Schema.Type keySchemaType = keySchema.type();
 			if (keySchemaType.isPrimitive()) {
@@ -139,7 +140,9 @@ public class FieldsMetadata {
 						throw new ConnectException(
 								String.format(
 										"PK mode for table '%s' is %s with configured PK fields %s, but record value schema does not contain field: %s",
-										tableName, pkMode, configuredPkFields,
+										tableName, 
+										pkMode, 
+										configuredPkFields,
 										fieldName));
 					}
 				}
@@ -167,23 +170,19 @@ public class FieldsMetadata {
 				if (keyFieldNames.contains(field.name())) {
 					continue;
 				}
-				if (!fieldsWhitelist.isEmpty()
-						&& !fieldsWhitelist.contains(field.name())) {
+				if (!fieldsWhitelist.isEmpty() && !fieldsWhitelist.contains(field.name())) {
 					continue;
 				}
 
 				nonKeyFieldNames.add(field.name());
 
 				final Schema fieldSchema = field.schema();
-				allFields.put(field.name(), new SinkRecordField(fieldSchema,
-						field.name(), false));
+				allFields.put(field.name(), new SinkRecordField(fieldSchema, field.name(), false));
 			}
 		}
 
 		if (allFields.isEmpty()) {
-			throw new ConnectException(
-					"No fields found using key and value schemas for table: "
-							+ tableName);
+			throw new ConnectException("No fields found using key and value schemas for table: " + tableName);
 		}
 
 		return new FieldsMetadata(keyFieldNames, nonKeyFieldNames, allFields);
@@ -191,8 +190,6 @@ public class FieldsMetadata {
 
 	@Override
 	public String toString() {
-		return "FieldsMetadata{" + "keyFieldNames=" + keyFieldNames
-				+ ", nonKeyFieldNames=" + nonKeyFieldNames + ", allFields="
-				+ allFields + '}';
+		return "FieldsMetadata{" + "keyFieldNames:" + keyFieldNames + ", nonKeyFieldNames:" + nonKeyFieldNames + ", allFields:" + allFields + '}';
 	}
 }

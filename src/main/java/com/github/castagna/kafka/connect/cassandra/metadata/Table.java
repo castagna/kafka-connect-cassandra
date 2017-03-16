@@ -37,7 +37,7 @@ public class Table {
 
 	@Override
 	public String toString() {
-		return "Table{" + "name='" + name + '\'' + ", columns=" + columns + '}';
+		return "Table{" + "name:'" + name + '\'' + ", columns:" + columns + '}';
 	}
 
 }

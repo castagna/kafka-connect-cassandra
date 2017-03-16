@@ -13,10 +13,6 @@
  */
 package com.github.castagna.kafka.connect.cassandra.metadata;
 
-// CREATE KEYSPACE Test WITH replication = {'class': 'SimpleStrategy', 'replication_factor' : 1};
-// DESCRIBE keyspaces;
-// CREATE TABLE t ( pk int, t int, v text, s text static, PRIMARY KEY (pk, t) );
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -25,14 +21,15 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.ColumnMetadata;
+import com.datastax.driver.core.DataType;
 import com.datastax.driver.core.KeyspaceMetadata;
 import com.datastax.driver.core.Metadata;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.TableMetadata;
 
 public abstract class CassandraMetadataQueries {
+
 	private static final Logger log = LoggerFactory.getLogger(CassandraMetadataQueries.class);
 
 	public static boolean doesTableExist (final Session session, final String keyspaceName, final String tableName) {
@@ -48,7 +45,7 @@ public abstract class CassandraMetadataQueries {
 			exists = tableMetadata != null;
 			log.info("table:{} is {} in keyspace:{}", tableName, exists ? "present" : "absent", keyspaceName);
 		} else {
-			log.info("keyspace:{} does not exist", keyspaceName);			
+			log.info("table:{} is absent in keyspace:{}, keyspace does not exist", tableName, keyspaceName);
 		}
 
 		return exists;
@@ -72,7 +69,7 @@ public abstract class CassandraMetadataQueries {
 				List<ColumnMetadata> columnsMetadata = tableMetadata.getColumns();
 				for (ColumnMetadata columnMetadata : columnsMetadata) {
 			        final String columnName = columnMetadata.getName();
-			        final int columnType = columnMetadata.getType().hashCode(); // TODO: CHECK THIS!
+			        final DataType columnType = columnMetadata.getType();
 			        final boolean isPk = pkColumns.contains(columnName);
 			        final boolean isNullable = !isPk;
 			        columns.add(new TableColumn(columnName, isPk, isNullable, columnType));
@@ -81,21 +78,6 @@ public abstract class CassandraMetadataQueries {
 		}
 
 		return new Table(tableName, columns);
-	}
-
-	public static void main(String[] args) {
-		Cluster cluster = null;
-		try {
-		    cluster = Cluster.builder().addContactPoint("127.0.0.1").build();
-		    Session session = cluster.connect();
-		    
-		    System.out.println(doesTableExist(session, "test", "test"));
-		    System.out.println(doesTableExist(session, "test", "t"));
-		    System.out.println(getTableMetadata(session, "test", "t"));
-		    System.out.println(getTableMetadata(session, "test", "test"));
-		} finally {
-		    if (cluster != null) cluster.close();
-		}
 	}
 	
 }

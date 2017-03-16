@@ -28,11 +28,12 @@ public class TableMetadataLoadingCache {
 	private final Map<String, Table> cache = new HashMap<String, Table>();
 
 	public Table get(final Session session, final String keyspaceName, final String tableName) {
-		Table table = cache.get(tableName);
+		final String key = keyspaceName + "_" + tableName;
+		Table table = cache.get(key);
 		if (table == null) {
 			if (CassandraMetadataQueries.doesTableExist(session, keyspaceName, tableName)) {
 				table = CassandraMetadataQueries.getTableMetadata(session, keyspaceName, tableName);
-				cache.put(tableName, table);
+				cache.put(key, table);
 			} else {
 				return null;
 			}
@@ -41,9 +42,10 @@ public class TableMetadataLoadingCache {
 	}
 
 	public Table refresh(final Session session, final String keyspaceName, final String tableName) {
+		final String key = keyspaceName + "_" + tableName;
 		Table table = CassandraMetadataQueries.getTableMetadata(session, keyspaceName, tableName);
-		log.info("Updating cached metadata -- {}", table);
-		cache.put(table.name, table);
+		log.info("Updating cached metadata for keyspace:{}, table:{}", keyspaceName, tableName);
+		cache.put(key, table);
 		return table;
 	}
 
