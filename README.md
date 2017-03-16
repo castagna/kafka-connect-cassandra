@@ -20,6 +20,15 @@ You can build kafka-connect-cassandra with Maven using the standard lifecycle ph
 
 # Contribute
 
+If you want to help out with development or testing:
+
+```
+git clone https://github.com/castagna/kafka-connect-cassandra.git
+cd kafka-connect-cassandra
+mvn package
+cp -a target/kafka-connect-cassandra-0.1-SNAPSHOT-package/* $CONFLUENT_HOME/
+```
+
 - Source Code: https://github.com/castagna/kafka-connect-cassandra
 - Issue Tracker: https://github.com/castagna/kafka-connect-cassandra/issues
 
