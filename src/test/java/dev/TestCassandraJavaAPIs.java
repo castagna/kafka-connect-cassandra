@@ -10,6 +10,8 @@ import java.util.List;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.KeyspaceMetadata;
@@ -19,6 +21,7 @@ import com.datastax.driver.core.Row;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.Statement;
 import com.datastax.driver.core.TableMetadata;
+import com.datastax.driver.core.querybuilder.Batch;
 import com.datastax.driver.core.querybuilder.Insert;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
 import com.datastax.driver.core.querybuilder.Update;
@@ -32,8 +35,11 @@ public class TestCassandraJavaAPIs {
 	private static String keyspaceName = null;
 	private static String tableName = null;
 
+	private static final Logger log = LoggerFactory.getLogger(TestCassandraJavaAPIs.class);
+	
     @BeforeClass
     public static void setup() {
+    	log.debug("setup() method called.");
 	    cluster = Cluster.builder().addContactPoint("127.0.0.1").build();
 	    session = cluster.connect();
 	    keyspaceName = "test_" + new Date().getTime();
@@ -42,6 +48,7 @@ public class TestCassandraJavaAPIs {
     
     @AfterClass
     public static void teardown() {
+    	log.debug("teardown() method called.");
     	if (keyspaceExists(keyspaceName)) {
     		keyspaceDelete(keyspaceName);
     	}
@@ -119,13 +126,58 @@ public class TestCassandraJavaAPIs {
         	
             i = 0;
             while ( !rs.isExhausted() ) {
-                Row row = rs.one();
+                rs.one();
                 ++i;
             }
             assertEquals(0, i);
     	} finally {
     		keyspaceDelete(keyspaceName);
     	}    	
+    }
+    
+    @Test
+    public void testQueryBuilderBatch() {
+    	try {
+        	keyspaceCreate(keyspaceName);
+        	tableCreate(keyspaceName, tableName);    		
+    		
+        	Batch batch = QueryBuilder.batch();
+        	
+        	Insert stmtInsert = QueryBuilder.insertInto(keyspaceName, tableName);
+        	stmtInsert.value("c1", 1);
+        	stmtInsert.value("c2", "One");
+        	batch.add(stmtInsert);
+
+        	Update stmtUpdate = QueryBuilder.update(keyspaceName, tableName);
+        	stmtUpdate.where(QueryBuilder.eq("c1", 1));
+        	stmtUpdate.with(QueryBuilder.set("c2", "Uno"));
+        	batch.add((Update)stmtUpdate);
+
+        	session.execute(batch);
+
+        	Statement stmt = QueryBuilder.select().all().from(keyspaceName, tableName);
+        	ResultSet rs = session.execute(stmt);
+            rs = session.execute(stmt);
+            int i = 0;
+            while ( !rs.isExhausted() ) {
+                Row row = rs.one();
+                assertTrue(row.getInt(0) == 1);
+                assertTrue(row.getString(1).equals("Uno"));
+                ++i;
+            }
+            assertEquals(1, i);
+    	} finally {
+    		keyspaceDelete(keyspaceName);
+    	}      	
+    }
+    
+    @Test
+    public void testLogLevels() {
+    	log.debug("I am a DEBUG level log message.");
+    	log.trace("I am a TRACE level log message.");
+    	log.info("I am a INFO level log message.");
+    	log.error("I am a ERROR level log message.");
+    	log.warn("I am a WARN level log message.");
     }
 
     private static boolean keyspaceExists (String keyspaceName) {
