@@ -15,7 +15,7 @@ import org.apache.avro.io.EncoderFactory;
 import org.junit.Before;
 import org.junit.Test;
 
-public class TestAvroMessageFormatter  {
+public class AvroMessageFormatterTest  {
 
     private final String schema = "{" +
     		"\"type\": \"record\", " +

@@ -25,35 +25,51 @@ import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.LocalDate;
-import com.datastax.driver.core.PreparedStatement;
 import com.github.castagna.kafka.connect.cassandra.metadata.FieldsMetadata;
 import com.github.castagna.kafka.connect.cassandra.metadata.SchemaPair;
 
 public class CassandraPreparedStatementBinder {
 
-  private final CassandraSinkConnectorConfig.PrimaryKeyMode pkMode;
-  private final PreparedStatement preparedStatement;
-  private final SchemaPair schemaPair;
-  private final FieldsMetadata fieldsMetadata;
+	private final CassandraSinkConnectorConfig config;
+	private final CassandraSinkConnectorConfig.PrimaryKeyMode pkMode;
+	private final SchemaPair schemaPair;
+	private final FieldsMetadata fieldsMetadata;
+	
+	private static final Logger log = LoggerFactory.getLogger(CassandraPreparedStatementBinder.class);
 
-	public CassandraPreparedStatementBinder(PreparedStatement statement, CassandraSinkConnectorConfig.PrimaryKeyMode pkMode, SchemaPair schemaPair, FieldsMetadata fieldsMetadata) {
-		this.pkMode = pkMode;
-		this.preparedStatement = statement;
+	public CassandraPreparedStatementBinder(CassandraSinkConnectorConfig config, SchemaPair schemaPair, FieldsMetadata fieldsMetadata) {
+		this.config = config;
+		this.pkMode = config.pkMode;
 		this.schemaPair = schemaPair;
 		this.fieldsMetadata = fieldsMetadata;
 	}
 
-	public void bindRecord(SinkRecord record) {
+	public void bindRecord(SinkRecord record, BoundStatement statement) {
+		log.trace("Binding {} record...", record);
+		
 		final Struct valueStruct = (Struct) record.value();
+		final String operation = BufferedRecords.getOperation(config, record);
+		int index = 0;
 
-		// Assumption: the relevant SQL has placeholders for keyFieldNames first
-		// followed by nonKeyFieldNames, in iteration order
-
-		int index = 1;
-
+		if ( operation.equals(config.getString(CassandraSinkConnectorConfig.OPERATION_TYPE_INSERT_VALUE)) ) {
+			index = bindKeyFieldNames(statement, index++, record, valueStruct);
+			index = bindNonKeyFieldNames(statement, index++, record, valueStruct);
+		} else if ( operation.equals(config.getString(CassandraSinkConnectorConfig.OPERATION_TYPE_UPDATE_VALUE)) ) {
+			index = bindNonKeyFieldNames(statement, index++, record, valueStruct);
+			index = bindKeyFieldNames(statement, index++, record, valueStruct);
+		} else if ( operation.equals(config.getString(CassandraSinkConnectorConfig.OPERATION_TYPE_DELETE_VALUE)) ) {
+			index = bindKeyFieldNames(statement, index++, record, valueStruct);
+		} else {
+			throw new ConnectException("Invalid operation type, please, check the ``" + CassandraSinkConnectorConfig.OPERATION_TYPE_FIELD_NAME + "`` and corresponding values for INSERT, UPDATE, and DELETE operations.");
+		}
+	}
+	
+	private int bindKeyFieldNames(BoundStatement statement, int index, SinkRecord record, Struct valueStruct) {
 		switch (pkMode) {
 		case NONE:
 			if (!fieldsMetadata.keyFieldNames.isEmpty()) {
@@ -63,21 +79,20 @@ public class CassandraPreparedStatementBinder {
 
 		case KAFKA: {
 			assert fieldsMetadata.keyFieldNames.size() == 3;
-			bindField(index++, Schema.STRING_SCHEMA, record.topic());
-			bindField(index++, Schema.INT32_SCHEMA, record.kafkaPartition());
-			bindField(index++, Schema.INT64_SCHEMA, record.kafkaOffset());
+			bindField(statement, index++, Schema.STRING_SCHEMA, record.topic());
+			bindField(statement, index++, Schema.INT32_SCHEMA, record.kafkaPartition());
+			bindField(statement, index++, Schema.INT64_SCHEMA, record.kafkaOffset());
 		}
 			break;
 
 		case RECORD_KEY: {
 			if (schemaPair.keySchema.type().isPrimitive()) {
 				assert fieldsMetadata.keyFieldNames.size() == 1;
-				bindField(index++, schemaPair.keySchema, record.key());
+				bindField(statement, index++, schemaPair.keySchema, record.key());
 			} else {
 				for (String fieldName : fieldsMetadata.keyFieldNames) {
 					final Field field = schemaPair.keySchema.field(fieldName);
-					bindField(index++, field.schema(),
-							((Struct) record.key()).get(field));
+					bindField(statement, index++, field.schema(), ((Struct) record.key()).get(field));
 				}
 			}
 		}
@@ -86,32 +101,28 @@ public class CassandraPreparedStatementBinder {
 		case RECORD_VALUE: {
 			for (String fieldName : fieldsMetadata.keyFieldNames) {
 				final Field field = schemaPair.valueSchema.field(fieldName);
-				bindField(index++, field.schema(),
-						((Struct) record.value()).get(field));
+				bindField(statement, index++, field.schema(), ((Struct) record.value()).get(field));
 			}
 		}
 			break;
 		}
-
+		
+		return index;
+	}
+	
+	private int bindNonKeyFieldNames(BoundStatement statement, int index, SinkRecord record, Struct valueStruct) {
 		for (final String fieldName : fieldsMetadata.nonKeyFieldNames) {
 			final Field field = record.valueSchema().field(fieldName);
-			bindField(index++, field.schema(), valueStruct.get(field));
+			bindField(statement, index++, field.schema(), valueStruct.get(field));
 		}
-
-		// preparedStatement.addBatch(); // TODO: is this needed with Cassandra?
+		return index;
 	}
 
-	void bindField(int index, Schema schema, Object value) {
-		bindField(preparedStatement, index, schema, value);
-	}
-
-	static void bindField(PreparedStatement preparedStatement, int index, Schema schema, Object value) {
-		BoundStatement statement = preparedStatement.bind();
+	void bindField(BoundStatement statement, int index, Schema schema, Object value) {
 		if (value == null) {
-			// statement.setObject(index, null); // TODO: what do I do here???
+			statement.set(index, null, Object.class);
 		} else {
-			final boolean bound = maybeBindLogical(preparedStatement, index,
-					schema, value);
+			final boolean bound = maybeBindLogical(statement, index, schema, value);
 			if (!bound) {
 				switch (schema.type()) {
 				case INT8:
@@ -139,30 +150,24 @@ public class CassandraPreparedStatementBinder {
 					statement.setString(index, (String) value);
 					break;
 				case BYTES:
-					final ByteBuffer bytes;
 					if (value instanceof ByteBuffer) {
-						bytes = (ByteBuffer) value;
+						statement.setBytes(index, (ByteBuffer)value);
 					} else {
-						bytes = ByteBuffer.wrap((byte[]) value);
+						statement.setBytes(index, ByteBuffer.wrap((byte[])value));
 					}
-					statement.setBytes(index, bytes);
 					break;
 				default:
-					throw new ConnectException("Unsupported source data type: "
-							+ schema.type());
+					throw new ConnectException("Unsupported source data type: " + schema.type());
 				}
 			}
 		}
 	}
 
-	static boolean maybeBindLogical(PreparedStatement preparedStatement, int index, Schema schema, Object value) {
-		BoundStatement statement = preparedStatement.bind();
+	static boolean maybeBindLogical(BoundStatement statement, int index, Schema schema, Object value) {
 		if (schema.name() != null) {
 			switch (schema.name()) {
 			case Date.LOGICAL_NAME:
-				statement.setDate(index, LocalDate
-						.fromMillisSinceEpoch(((java.util.Date) value)
-								.getTime()));
+				statement.setDate(index, LocalDate.fromMillisSinceEpoch(((java.util.Date) value).getTime()));
 				return true;
 			case Decimal.LOGICAL_NAME:
 				statement.setDecimal(index, (BigDecimal) value);
@@ -171,7 +176,7 @@ public class CassandraPreparedStatementBinder {
 				statement.setTime(index, ((java.util.Date) value).getTime());
 				return true;
 			case Timestamp.LOGICAL_NAME:
-				statement.setTimestamp(index, (java.util.Date) value);
+				statement.setTimestamp(index, new java.sql.Timestamp(((java.util.Date) value).getTime()));
 				return true;
 			default:
 				return false;

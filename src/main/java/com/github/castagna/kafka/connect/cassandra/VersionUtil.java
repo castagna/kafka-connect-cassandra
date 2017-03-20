@@ -20,22 +20,22 @@ import org.slf4j.LoggerFactory;
 
 class VersionUtil {
 
-	  private static final Logger log = LoggerFactory.getLogger(VersionUtil.class);
+	private static final Logger log = LoggerFactory.getLogger(VersionUtil.class);
 
-	  private static String version = "Unknown";
+	private static String version = "Unknown";
 
-	  static {
-	    try {
-	      Properties props = new Properties();
-	      props.load(VersionUtil.class.getResourceAsStream("/kafka-connect-cassandra-version.properties"));
-	      version = props.getProperty("version", version).trim();
-	    } catch (Exception e) {
-	      log.warn("Error while loading version:", e);
-	    }
-	  }
+	static {
+		try {
+			Properties props = new Properties();
+			props.load(VersionUtil.class.getResourceAsStream("/kafka-connect-cassandra-version.properties"));
+			version = props.getProperty("version", version).trim();
+		} catch (Exception e) {
+			log.warn("Error while loading version:", e);
+		}
+	}
 
-	  public static String getVersion() {
-	    return version;
+	public static String getVersion() {
+		return version;
 	}
 
 }

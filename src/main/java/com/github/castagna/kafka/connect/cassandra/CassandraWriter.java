@@ -17,6 +17,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
@@ -40,10 +41,10 @@ public class CassandraWriter {
 
 		final Map<String, BufferedRecords> bufferByTable = new HashMap<>();
 		for (SinkRecord record : records) {
-			final String table = destinationTable(record.topic());
+			final String table = destinationTable(record);
 			BufferedRecords buffer = bufferByTable.get(table);
 			if (buffer == null) {
-				buffer = new BufferedRecords(config, table, cassandraStructure, session);
+				buffer = new BufferedRecords(config, config.cassandraKeyspace, table, cassandraStructure, session);
 				bufferByTable.put(table, buffer);
 			}
 			buffer.add(record);
@@ -58,12 +59,14 @@ public class CassandraWriter {
 		cachedSessionProvider.closeQuietly();
 	}
 
-	String destinationTable(String topic) {
-		final String tableName = config.tableNameFormat.replace("${topic}", topic);
+	String destinationTable(SinkRecord record) {
+		final Struct struct = (Struct)record.value();
+		final String table = struct.getString("table");
+		final String tableName = config.tableNameFormat.replace("${topic}", table); // TODO: make this configurable?
 		if (tableName.isEmpty()) {
 			throw new ConnectException(
-					String.format("Destination table name for topic '%s' is empty using the format string '%s'",
-							topic, 
+					String.format("Destination table name for table '%s' is empty using the format string '%s'",
+							table, 
 							config.tableNameFormat));
 		}
 		return tableName;

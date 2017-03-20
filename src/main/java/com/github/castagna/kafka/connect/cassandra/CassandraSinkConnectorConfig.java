@@ -26,10 +26,10 @@ import org.apache.kafka.common.config.ConfigException;
 
 public class CassandraSinkConnectorConfig extends AbstractConfig {
 
-	public final InsertMode insertMode;
 	public final PrimaryKeyMode pkMode;
 	public final List<String> pkFields;
 	public final Set<String> fieldsWhitelist;
+	public final Set<String> fieldsBlacklist;
 	public final int batchSize;
 	public final String tableNameFormat;
 	public final boolean autoCreate;
@@ -68,6 +68,26 @@ public class CassandraSinkConnectorConfig extends AbstractConfig {
 	      + "For example, ``kafka_${topic}`` for the topic 'orders' will map to the table name 'kafka_orders'.";
 	private static final String TABLE_NAME_FORMAT_DISPLAY = "Table Name Format";
 	
+	public static final String OPERATION_TYPE_FIELD_NAME = "operation.type.fieldname";
+	private static final String OPERATION_TYPE_FIELD_NAME_DEFAULT = "op_type";
+	private static final String OPERATION_TYPE_FIELD_NAME_DOC =	"The name of the field identifying the operation type (i.e. INSERT, UPDATE, DELETE).";
+	private static final String OPERATION_TYPE_FIELD_NAME_DISPLAY = "Operation Type Field Name";
+	
+	public static final String OPERATION_TYPE_INSERT_VALUE = "operation.type.insert.value";
+	private static final String OPERATION_TYPE_INSERT_VALUE_DEFAULT = "I";
+	private static final String OPERATION_TYPE_INSERT_VALUE_DOC =	"The value of the field ``" + OPERATION_TYPE_FIELD_NAME + "`` identifying an INSERT operation.";
+	private static final String OPERATION_TYPE_INSERT_VALUE_DISPLAY = "INSERT Identifier";
+
+	public static final String OPERATION_TYPE_UPDATE_VALUE = "operation.type.update.value";
+	private static final String OPERATION_TYPE_UPDATE_VALUE_DEFAULT = "U";
+	private static final String OPERATION_TYPE_UPDATE_VALUE_DOC =	"The value of the field ``" + OPERATION_TYPE_FIELD_NAME + "`` identifying an UPDATE operation.";
+	private static final String OPERATION_TYPE_UPDATE_VALUE_DISPLAY = "UPDATE Identifier";
+
+	public static final String OPERATION_TYPE_DELETE_VALUE = "operation.type.delete.value";
+	private static final String OPERATION_TYPE_DELETE_VALUE_DEFAULT = "D";
+	private static final String OPERATION_TYPE_DELETE_VALUE_DOC =	"The value of the field ``" + OPERATION_TYPE_FIELD_NAME + "`` identifying an DELETE operation.";
+	private static final String OPERATION_TYPE_DELETE_VALUE_DISPLAY = "DELETE Identifier";
+
 	public static final String BATCH_SIZE = "batch.size";
 	private static final int BATCH_SIZE_DEFAULT = 3000;
 	private static final String BATCH_SIZE_DOC = "Specifies how many records to attempt to batch together for insertion into the destination table, when possible.";
@@ -105,15 +125,11 @@ public class CassandraSinkConnectorConfig extends AbstractConfig {
 	      + "Note that ``" + PK_FIELDS + "`` is applied independently in the context of which field(s) form the primary key columns in the destination database, while this configuration is applicable for the other columns.";
 	private static final String FIELDS_WHITELIST_DISPLAY = "Fields Whitelist";	
 	
-	
-	public static final String INSERT_MODE = "insert.mode";
-	private static final String INSERT_MODE_DEFAULT = "insert";
-	private static final String INSERT_MODE_DOC = "The insertion mode to use. Supported modes are:\n"
-	      + "``insert``\n"
-	      + "    Use standard SQL ``INSERT`` statements.\n"
-	      + "``upsert``\n"
-	      + "    Use the appropriate upsert semantics for the target database if it is supported by the connector, e.g. ``INSERT OR IGNORE``.";
-	private static final String INSERT_MODE_DISPLAY = "Insert Mode";
+	public static final String FIELDS_BLACKLIST = "fields.blacklist";
+	private static final String FIELDS_BLACKLIST_DEFAULT = "";
+	private static final String FIELDS_BLACKLIST_DOC = "List of comma-separated record value field names. If empty, all fields from the record value are utilized, otherwise used to filter out the undesired fields.\n"
+	      + "Note that ``" + PK_FIELDS + "`` is applied independently in the context of which field(s) form the primary key columns in the destination database, while this configuration is applicable for the other columns.";
+	private static final String FIELDS_BLACKLIST_DISPLAY = "Fields Blacklist";	
 
 	public static final String AUTO_CREATE = "auto.create";
 	private static final String AUTO_CREATE_DEFAULT = "false";
@@ -130,17 +146,17 @@ public class CassandraSinkConnectorConfig extends AbstractConfig {
 	private static final String MAX_RETRIES_DOC = "The maximum number of times to retry on errors before failing the task.";
 	private static final String MAX_RETRIES_DISPLAY = "Maximum Retries";
 
-	protected CassandraSinkConnectorConfig(Map<String, String> properties) {
-		super(config(), properties);
+	protected CassandraSinkConnectorConfig(Map<String, String> settings) {
+		super(config(), settings);
 
 		cassandraHost = getString(CASSANDRA_HOST_CONFIG);
 		cassandraKeyspace = getString(CASSANDRA_KEYSPACE_NAME_CONFIG);
 
 		batchSize = getInt(BATCH_SIZE);
-		insertMode = InsertMode.valueOf(getString(INSERT_MODE).toUpperCase());
 	    pkMode = PrimaryKeyMode.valueOf(getString(PK_MODE).toUpperCase());
 	    pkFields = getList(PK_FIELDS);
 	    fieldsWhitelist = new HashSet<String>(getList(FIELDS_WHITELIST));
+	    fieldsBlacklist = new HashSet<String>(getList(FIELDS_BLACKLIST));
 	    tableNameFormat = getString(TABLE_NAME_FORMAT).trim();
 	    autoCreate = getBoolean(AUTO_CREATE);
 	    autoEvolve = getBoolean(AUTO_EVOLVE);
@@ -153,12 +169,16 @@ public class CassandraSinkConnectorConfig extends AbstractConfig {
 		return new ConfigDef()
 			.define(CASSANDRA_KEYSPACE_NAME_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, CASSANDRA_KEYSPACE_NAME_DOC)
 			.define(CASSANDRA_HOST_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, CASSANDRA_HOST_DOC)
-	        .define(INSERT_MODE, ConfigDef.Type.STRING, INSERT_MODE_DEFAULT, EnumValidator.in(InsertMode.values()), ConfigDef.Importance.HIGH, INSERT_MODE_DOC, WRITES_GROUP, 1, ConfigDef.Width.MEDIUM, INSERT_MODE_DISPLAY)
 	        .define(PK_MODE, ConfigDef.Type.STRING, PK_MODE_DEFAULT, EnumValidator.in(PrimaryKeyMode.values()), ConfigDef.Importance.HIGH, PK_MODE_DOC, DATAMAPPING_GROUP, 2, ConfigDef.Width.MEDIUM, PK_MODE_DISPLAY)
 	        .define(PK_FIELDS, ConfigDef.Type.LIST, PK_FIELDS_DEFAULT, ConfigDef.Importance.MEDIUM, PK_FIELDS_DOC, DATAMAPPING_GROUP, 3, ConfigDef.Width.LONG, PK_FIELDS_DISPLAY)
 	        .define(FIELDS_WHITELIST, ConfigDef.Type.LIST, FIELDS_WHITELIST_DEFAULT, ConfigDef.Importance.MEDIUM, FIELDS_WHITELIST_DOC, DATAMAPPING_GROUP, 4, ConfigDef.Width.LONG, FIELDS_WHITELIST_DISPLAY)
+	        .define(FIELDS_BLACKLIST, ConfigDef.Type.LIST, FIELDS_BLACKLIST_DEFAULT, ConfigDef.Importance.MEDIUM, FIELDS_BLACKLIST_DOC, DATAMAPPING_GROUP, 4, ConfigDef.Width.LONG, FIELDS_BLACKLIST_DISPLAY)
 	      	.define(BATCH_SIZE, ConfigDef.Type.INT, BATCH_SIZE_DEFAULT, NON_NEGATIVE_INT_VALIDATOR, ConfigDef.Importance.MEDIUM, BATCH_SIZE_DOC, WRITES_GROUP, 2, ConfigDef.Width.SHORT, BATCH_SIZE_DISPLAY)
 			.define(TABLE_NAME_FORMAT, ConfigDef.Type.STRING, TABLE_NAME_FORMAT_DEFAULT, ConfigDef.Importance.MEDIUM, TABLE_NAME_FORMAT_DOC, DATAMAPPING_GROUP, 1, ConfigDef.Width.LONG, TABLE_NAME_FORMAT_DISPLAY)
+			.define(OPERATION_TYPE_FIELD_NAME, ConfigDef.Type.STRING, OPERATION_TYPE_FIELD_NAME_DEFAULT, ConfigDef.Importance.MEDIUM, OPERATION_TYPE_FIELD_NAME_DOC, DATAMAPPING_GROUP, 2, ConfigDef.Width.LONG, OPERATION_TYPE_FIELD_NAME_DISPLAY)
+			.define(OPERATION_TYPE_INSERT_VALUE, ConfigDef.Type.STRING, OPERATION_TYPE_INSERT_VALUE_DEFAULT, ConfigDef.Importance.MEDIUM, OPERATION_TYPE_INSERT_VALUE_DOC, DATAMAPPING_GROUP, 3, ConfigDef.Width.LONG, OPERATION_TYPE_INSERT_VALUE_DISPLAY)
+			.define(OPERATION_TYPE_UPDATE_VALUE, ConfigDef.Type.STRING, OPERATION_TYPE_UPDATE_VALUE_DEFAULT, ConfigDef.Importance.MEDIUM, OPERATION_TYPE_UPDATE_VALUE_DOC, DATAMAPPING_GROUP, 4, ConfigDef.Width.LONG, OPERATION_TYPE_UPDATE_VALUE_DISPLAY)
+			.define(OPERATION_TYPE_DELETE_VALUE, ConfigDef.Type.STRING, OPERATION_TYPE_DELETE_VALUE_DEFAULT, ConfigDef.Importance.MEDIUM, OPERATION_TYPE_DELETE_VALUE_DOC, DATAMAPPING_GROUP, 5, ConfigDef.Width.LONG, OPERATION_TYPE_DELETE_VALUE_DISPLAY)
 			.define(AUTO_CREATE, ConfigDef.Type.BOOLEAN, AUTO_CREATE_DEFAULT, ConfigDef.Importance.MEDIUM, AUTO_CREATE_DOC, DDL_GROUP, 1, ConfigDef.Width.SHORT, AUTO_CREATE_DISPLAY)
 			.define(AUTO_EVOLVE, ConfigDef.Type.BOOLEAN, AUTO_EVOLVE_DEFAULT, ConfigDef.Importance.MEDIUM, AUTO_EVOLVE_DOC, DDL_GROUP, 2, ConfigDef.Width.SHORT, AUTO_EVOLVE_DISPLAY)
 			.define(MAX_RETRIES, ConfigDef.Type.INT, MAX_RETRIES_DEFAULT, NON_NEGATIVE_INT_VALIDATOR, ConfigDef.Importance.MEDIUM, MAX_RETRIES_DOC, RETRIES_GROUP, 1, ConfigDef.Width.SHORT, MAX_RETRIES_DISPLAY)

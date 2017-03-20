@@ -17,11 +17,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.datastax.driver.core.BatchStatement;
+import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.Session;
 import com.github.castagna.kafka.connect.cassandra.metadata.FieldsMetadata;
@@ -30,6 +33,7 @@ import com.github.castagna.kafka.connect.cassandra.metadata.SchemaPair;
 public class BufferedRecords {
 	private static final Logger log = LoggerFactory.getLogger(BufferedRecords.class);
 
+	private final String keyspaceName;
 	private final String tableName;
 	private final CassandraSinkConnectorConfig config;
 	private final Session session;
@@ -39,10 +43,13 @@ public class BufferedRecords {
 	private FieldsMetadata fieldsMetadata;
 	private PreparedStatement preparedStatement;
 	private CassandraPreparedStatementBinder preparedStatementBinder;
+	private CassandraStructure cassandraStructure;
 
-	public BufferedRecords(CassandraSinkConnectorConfig config, String tableName, CassandraStructure cassandraStructure, Session session) {
+	public BufferedRecords(CassandraSinkConnectorConfig config, String keyspaceName, String tableName, CassandraStructure cassandraStructure, Session session) {
 		this.config = config;
+		this.keyspaceName = keyspaceName;
 		this.tableName = tableName;
+		this.cassandraStructure = cassandraStructure;
 		this.session = session;
 	}
 
@@ -52,26 +59,12 @@ public class BufferedRecords {
 		if (currentSchemaPair == null) {
 			currentSchemaPair = schemaPair;
 			// re-initialize everything that depends on the record schema
-			fieldsMetadata = FieldsMetadata.extract(tableName, config.pkMode, config.pkFields, config.fieldsWhitelist, currentSchemaPair);
-
-			// TODO: dbStructure.createOrAmendIfNecessary(config, session,
-			// tableName, fieldsMetadata);
-
-			final String insertSql = getInsertSql();
-			log.debug("{} sql: {}", config.insertMode, insertSql);
-			close(); // TODO: why here???
-			
-//
-//			RegularStatement toPrepare = new SimpleStatement("SELECT * FROM test WHERE k=?").setConsistencyLevel(ConsistencyLevel.QUORUM);
-//			 PreparedStatement prepared = session.prepare(toPrepare);
-//			 session.execute(prepared.bind("someValue"));
-			 
-
-			// TODO
-			
-//			preparedStatement = session.prepareStatement(insertSql);
-//
-//			preparedStatementBinder = new PreparedStatementBinder(preparedStatement, config.pkMode, schemaPair, fieldsMetadata);
+			fieldsMetadata = FieldsMetadata.extract(tableName, config.pkMode, config.pkFields, config.fieldsWhitelist, config.fieldsBlacklist, currentSchemaPair);
+			cassandraStructure.createOrAmendIfNecessary(config, session, keyspaceName, tableName, fieldsMetadata);
+			final String statementCql = getCqlStatement(getOperation(config, record));
+			log.trace("cql: {}", statementCql);
+			preparedStatement = session.prepare(statementCql);
+			preparedStatementBinder = new CassandraPreparedStatementBinder(config, schemaPair, fieldsMetadata);
 		}
 
 		final List<SinkRecord> flushed;
@@ -84,8 +77,7 @@ public class BufferedRecords {
 				flushed = Collections.emptyList();
 			}
 		} else {
-			// Each batch needs to have the same SchemaPair, so get the buffered
-			// records out, reset state and re-attempt the add
+			// Each batch needs to have the same SchemaPair, so get the buffered records out, reset state and re-attempt the add
 			flushed = flush();
 			currentSchemaPair = null;
 			flushed.addAll(add(record));
@@ -93,37 +85,22 @@ public class BufferedRecords {
 		return flushed;
 	}
 
+	public static String getOperation(CassandraSinkConnectorConfig config, SinkRecord record) {
+		return ((Struct)record.value()).getString(config.getString(CassandraSinkConnectorConfig.OPERATION_TYPE_FIELD_NAME));
+	}
+	
 	public List<SinkRecord> flush() {
 		if (records.isEmpty()) {
 			return new ArrayList<>();
 		}
-		for (SinkRecord record : records) {
-			preparedStatementBinder.bindRecord(record);
-		}
 
-//		int totalUpdateCount = 0;
-//		boolean successNoInfo = false;
-//		for (int updateCount : preparedStatement.executeBatch()) {
-//			if (updateCount == Statement.SUCCESS_NO_INFO) {
-//				successNoInfo = true;
-//				continue;
-//			}
-//			totalUpdateCount += updateCount;
-//		}
-//		if (totalUpdateCount != records.size() && !successNoInfo) {
-//			switch (config.insertMode) {
-//			case INSERT:
-//				throw new ConnectException(String.format("Update count (%d) did not sum up to total number of records inserted (%d)", totalUpdateCount, records.size()));
-//			case UPSERT:
-//				log.trace("Upserted records:{} resulting in in totalUpdateCount:{}", records.size(), totalUpdateCount);
-//			}
-//		}
-//		if (successNoInfo) {
-//			log.info(
-//					config.insertMode
-//							+ " records:{} , but no count of the number of rows it affected is available",
-//					records.size());
-//		}
+		BatchStatement batch = new BatchStatement();
+		for (SinkRecord record : records) {
+			BoundStatement boundStatement = preparedStatement.bind();
+			preparedStatementBinder.bindRecord(record, boundStatement);
+			batch.add(boundStatement);
+		}
+		session.execute(batch);
 
 		final List<SinkRecord> flushedRecords = records;
 		records = new ArrayList<>();
@@ -137,17 +114,15 @@ public class BufferedRecords {
 		}
 	}
 
-	private String getInsertSql() {
-		switch (config.insertMode) {
-		case INSERT:
-			// TODO return dbDialect.getInsert(tableName, fieldsMetadata.keyFieldNames, fieldsMetadata.nonKeyFieldNames);
-		case UPSERT:
-			if (fieldsMetadata.keyFieldNames.isEmpty()) {
-				throw new ConnectException(String.format("Write to table '%s' in UPSERT mode requires key field names to be known, check the primary key configuration", tableName));
-			}
-			// TODO return dbDialect.getUpsertQuery(tableName, fieldsMetadata.keyFieldNames, fieldsMetadata.nonKeyFieldNames);
-		default:
-			throw new ConnectException("Invalid insert mode");
+	private String getCqlStatement(final String operation) {
+		if ( operation.equals(config.getString(CassandraSinkConnectorConfig.OPERATION_TYPE_INSERT_VALUE)) ) {
+			return cassandraStructure.getInsertStatement(keyspaceName, tableName, fieldsMetadata.keyFieldNames, fieldsMetadata.nonKeyFieldNames);
+		} else if ( operation.equals(config.getString(CassandraSinkConnectorConfig.OPERATION_TYPE_UPDATE_VALUE)) ) {
+			return cassandraStructure.getUpdateStatement(keyspaceName, tableName, fieldsMetadata.keyFieldNames, fieldsMetadata.nonKeyFieldNames);			
+		} else if ( operation.equals(config.getString(CassandraSinkConnectorConfig.OPERATION_TYPE_DELETE_VALUE)) ) {
+			return cassandraStructure.getDeleteStatement(keyspaceName, tableName, fieldsMetadata.keyFieldNames, fieldsMetadata.nonKeyFieldNames);
+		} else {
+			throw new ConnectException("Invalid operation type, please, check the ``" + CassandraSinkConnectorConfig.OPERATION_TYPE_FIELD_NAME + "`` and corresponding values for INSERT, UPDATE, and DELETE operations.");
 		}
 	}
 }

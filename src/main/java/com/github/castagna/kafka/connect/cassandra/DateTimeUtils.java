@@ -11,7 +11,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.github.castagna.kafka.connect.cassandra;
 
 import java.text.SimpleDateFormat;
@@ -22,49 +21,49 @@ import java.util.TimeZone;
 
 public class DateTimeUtils {
 
-  public static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+	public static final TimeZone UTC = TimeZone.getTimeZone("UTC");
 
-  public static final ThreadLocal<Calendar> UTC_CALENDAR = new ThreadLocal<Calendar>() {
-    @Override
-    protected Calendar initialValue() {
-      return new GregorianCalendar(TimeZone.getTimeZone("UTC"));
-    }
-  };
+	public static final ThreadLocal<Calendar> UTC_CALENDAR = new ThreadLocal<Calendar>() {
+		@Override
+		protected Calendar initialValue() {
+			return new GregorianCalendar(TimeZone.getTimeZone("UTC"));
+		}
+	};
 
-  private static final ThreadLocal<SimpleDateFormat> UTC_DATE_FORMAT = new ThreadLocal<SimpleDateFormat>() {
-    protected SimpleDateFormat initialValue() {
-      SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-      sdf.setTimeZone(UTC);
-      return sdf;
-    }
-  };
+	private static final ThreadLocal<SimpleDateFormat> UTC_DATE_FORMAT = new ThreadLocal<SimpleDateFormat>() {
+		protected SimpleDateFormat initialValue() {
+			SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+			sdf.setTimeZone(UTC);
+			return sdf;
+		}
+	};
 
-  private static final ThreadLocal<SimpleDateFormat> UTC_TIME_FORMAT = new ThreadLocal<SimpleDateFormat>() {
-    protected SimpleDateFormat initialValue() {
-      SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss.SSS");
-      sdf.setTimeZone(UTC);
-      return sdf;
-    }
-  };
+	private static final ThreadLocal<SimpleDateFormat> UTC_TIME_FORMAT = new ThreadLocal<SimpleDateFormat>() {
+		protected SimpleDateFormat initialValue() {
+			SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss.SSS");
+			sdf.setTimeZone(UTC);
+			return sdf;
+		}
+	};
 
-  private static final ThreadLocal<SimpleDateFormat> UTC_TIMESTAMP_FORMAT = new ThreadLocal<SimpleDateFormat>() {
-    protected SimpleDateFormat initialValue() {
-      SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-      sdf.setTimeZone(UTC);
-      return sdf;
-    }
-  };
+	private static final ThreadLocal<SimpleDateFormat> UTC_TIMESTAMP_FORMAT = new ThreadLocal<SimpleDateFormat>() {
+		protected SimpleDateFormat initialValue() {
+			SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+			sdf.setTimeZone(UTC);
+			return sdf;
+		}
+	};
 
-  public static String formatUtcDate(Date date) {
-    return UTC_DATE_FORMAT.get().format(date);
-  }
+	public static String formatUtcDate(Date date) {
+		return UTC_DATE_FORMAT.get().format(date);
+	}
 
-  public static String formatUtcTime(Date date) {
-    return UTC_TIME_FORMAT.get().format(date);
-  }
+	public static String formatUtcTime(Date date) {
+		return UTC_TIME_FORMAT.get().format(date);
+	}
 
-  public static String formatUtcTimestamp(Date date) {
-    return UTC_TIMESTAMP_FORMAT.get().format(date);
-  }
+	public static String formatUtcTimestamp(Date date) {
+		return UTC_TIMESTAMP_FORMAT.get().format(date);
+	}
 
 }

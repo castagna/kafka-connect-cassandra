@@ -28,56 +28,57 @@ import com.datastax.driver.core.querybuilder.Update;
 
 // This is for me... learning to use the Cassandra Java APIs...
 
-public class TestCassandraJavaAPIs {
+public class CassandraJavaAPIsTest {
 	
 	private static Cluster cluster = null;
 	private static Session session = null;
 	private static String keyspaceName = null;
 	private static String tableName = null;
+	private final static long timestamp = new Date().getTime();
 
-	private static final Logger log = LoggerFactory.getLogger(TestCassandraJavaAPIs.class);
+	private static final Logger log = LoggerFactory.getLogger(CassandraJavaAPIsTest.class);
 	
     @BeforeClass
     public static void setup() {
     	log.debug("setup() method called.");
 	    cluster = Cluster.builder().addContactPoint("127.0.0.1").build();
 	    session = cluster.connect();
-	    keyspaceName = "test_" + new Date().getTime();
-	    tableName = "table_" + new Date().getTime();
+		keyspaceName = "test_" + timestamp;
+		tableName = "table_" + timestamp;
     }
     
     @AfterClass
     public static void teardown() {
     	log.debug("teardown() method called.");
-    	if (keyspaceExists(keyspaceName)) {
-    		keyspaceDelete(keyspaceName);
+    	if (keyspaceExists(cluster, keyspaceName)) {
+    		keyspaceDelete(session, keyspaceName);
     	}
     }
 
     @Test
     public void testTableExistanceCreationDeletion() {
-    	assertFalse(keyspaceExists(keyspaceName));
-    	assertFalse(tableExists(keyspaceName, tableName));
+    	assertFalse(keyspaceExists(cluster, keyspaceName));
+    	assertFalse(tableExists(cluster, keyspaceName, tableName));
 
-    	keyspaceCreate(keyspaceName);
-    	assertTrue(keyspaceExists(keyspaceName));
+    	keyspaceCreate(session, keyspaceName);
+    	assertTrue(keyspaceExists(cluster, keyspaceName));
 
-    	assertFalse(tableExists(keyspaceName, tableName));
-    	tableCreate(keyspaceName, tableName);
-    	assertTrue(tableExists(keyspaceName, tableName));
+    	assertFalse(tableExists(cluster, keyspaceName, tableName));
+    	tableCreate(session, keyspaceName, tableName);
+    	assertTrue(tableExists(cluster, keyspaceName, tableName));
 
-    	tableDelete(keyspaceName, tableName);
-    	assertFalse(tableExists(keyspaceName, tableName));
+    	tableDelete(session, keyspaceName, tableName);
+    	assertFalse(tableExists(cluster, keyspaceName, tableName));
 
-    	keyspaceDelete(keyspaceName);
-    	assertFalse(keyspaceExists(keyspaceName));    
+    	keyspaceDelete(session, keyspaceName);
+    	assertFalse(keyspaceExists(cluster, keyspaceName));    
     }
     
     @Test
     public void testQueryBuilder() {
     	try {
-        	keyspaceCreate(keyspaceName);
-        	tableCreate(keyspaceName, tableName);
+        	keyspaceCreate(session, keyspaceName);
+        	tableCreate(session, keyspaceName, tableName);
 
         	// Perform an insert
         	Insert insert = QueryBuilder.insertInto(keyspaceName, tableName);
@@ -131,15 +132,15 @@ public class TestCassandraJavaAPIs {
             }
             assertEquals(0, i);
     	} finally {
-    		keyspaceDelete(keyspaceName);
+    		keyspaceDelete(session, keyspaceName);
     	}    	
     }
     
     @Test
     public void testQueryBuilderBatch() {
     	try {
-        	keyspaceCreate(keyspaceName);
-        	tableCreate(keyspaceName, tableName);    		
+        	keyspaceCreate(session, keyspaceName);
+        	tableCreate(session, keyspaceName, tableName);    		
     		
         	Batch batch = QueryBuilder.batch();
         	
@@ -167,7 +168,7 @@ public class TestCassandraJavaAPIs {
             }
             assertEquals(1, i);
     	} finally {
-    		keyspaceDelete(keyspaceName);
+    		keyspaceDelete(session, keyspaceName);
     	}      	
     }
     
@@ -180,7 +181,7 @@ public class TestCassandraJavaAPIs {
     	log.trace("I am a TRACE level log message.");
     }
 
-    private static boolean keyspaceExists (String keyspaceName) {
+    public static boolean keyspaceExists (Cluster cluster, String keyspaceName) {
     	Metadata metadata = cluster.getMetadata();
     	List<KeyspaceMetadata> keyspacesMetadata = metadata.getKeyspaces();
     	for (KeyspaceMetadata keyspaceMetadata : keyspacesMetadata) {
@@ -189,7 +190,7 @@ public class TestCassandraJavaAPIs {
     	return false;
     }
 
-    private static boolean tableExists (String keyspaceName, String tableName) {
+    public static boolean tableExists (Cluster cluster, String keyspaceName, String tableName) {
     	KeyspaceMetadata keyspaceMetadata = cluster.getMetadata().getKeyspace(keyspaceName);
     	if (keyspaceMetadata != null) {
         	TableMetadata tableMetadata = keyspaceMetadata.getTable(tableName);
@@ -199,19 +200,19 @@ public class TestCassandraJavaAPIs {
     	}
     }
 
-    private static void keyspaceCreate (String keyspaceName) {
+    public static void keyspaceCreate (Session session, String keyspaceName) {
     	session.execute("CREATE KEYSPACE " + keyspaceName + " WITH replication = {'class':'SimpleStrategy','replication_factor':1}");
     }
 
-    private static void keyspaceDelete (String keyspaceName) {
+    public static void keyspaceDelete (Session session, String keyspaceName) {
     	session.execute("DROP KEYSPACE " + keyspaceName);
     }
 
-    private static void tableCreate (String keyspaceName, String tableName) {
+    public static void tableCreate (Session session, String keyspaceName, String tableName) {
     	session.execute("CREATE TABLE " + keyspaceName + "." + tableName + "( c1 int PRIMARY KEY, c2 text )");
     }
 
-    private static void tableDelete (String keyspaceName, String tableName) {
+    public static void tableDelete (Session session, String keyspaceName, String tableName) {
     	session.execute("DROP TABLE " + keyspaceName + "." + tableName);
     }
 

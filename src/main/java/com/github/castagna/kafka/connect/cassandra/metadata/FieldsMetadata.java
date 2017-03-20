@@ -41,11 +41,11 @@ public class FieldsMetadata {
 		this.allFields = allFields;
 	}
 
-	public static FieldsMetadata extract(final String tableName, final CassandraSinkConnectorConfig.PrimaryKeyMode pkMode, final List<String> configuredPkFields, final Set<String> fieldsWhitelist, final SchemaPair schemaPair) {
-		return extract(tableName, pkMode, configuredPkFields, fieldsWhitelist, schemaPair.keySchema, schemaPair.valueSchema);
+	public static FieldsMetadata extract(final String tableName, final CassandraSinkConnectorConfig.PrimaryKeyMode pkMode, final List<String> configuredPkFields, final Set<String> fieldsWhitelist, final Set<String> fieldsBlacklist, final SchemaPair schemaPair) {
+		return extract(tableName, pkMode, configuredPkFields, fieldsWhitelist, fieldsBlacklist, schemaPair.keySchema, schemaPair.valueSchema);
 	}
 
-	public static FieldsMetadata extract(final String tableName, final CassandraSinkConnectorConfig.PrimaryKeyMode pkMode, final List<String> configuredPkFields, final Set<String> fieldsWhitelist, final Schema keySchema, final Schema valueSchema) {
+	public static FieldsMetadata extract(final String tableName, final CassandraSinkConnectorConfig.PrimaryKeyMode pkMode, final List<String> configuredPkFields, final Set<String> fieldsWhitelist, final Set<String> fieldsBlacklist, final Schema keySchema, final Schema valueSchema) {
 		if (valueSchema != null && valueSchema.type() != Schema.Type.STRUCT) {
 			throw new ConnectException("Value schema must be of type Struct");
 		}
@@ -93,8 +93,7 @@ public class FieldsMetadata {
 				}
 				final String fieldName = configuredPkFields.get(0);
 				keyFieldNames.add(fieldName);
-				allFields.put(fieldName, new SinkRecordField(keySchema,
-						fieldName, true));
+				allFields.put(fieldName, new SinkRecordField(keySchema, fieldName, true));
 			} else if (keySchemaType == Schema.Type.STRUCT) {
 				if (configuredPkFields.isEmpty()) {
 					for (Field keyField : keySchema.fields()) {
@@ -149,10 +148,8 @@ public class FieldsMetadata {
 				keyFieldNames.addAll(configuredPkFields);
 			}
 			for (String fieldName : keyFieldNames) {
-				final Schema fieldSchema = valueSchema.field(fieldName)
-						.schema();
-				allFields.put(fieldName, new SinkRecordField(fieldSchema,
-						fieldName, true));
+				final Schema fieldSchema = valueSchema.field(fieldName).schema();
+				allFields.put(fieldName, new SinkRecordField(fieldSchema, fieldName, true));
 			}
 		}
 			break;
@@ -173,7 +170,9 @@ public class FieldsMetadata {
 				if (!fieldsWhitelist.isEmpty() && !fieldsWhitelist.contains(field.name())) {
 					continue;
 				}
-
+				if (!fieldsBlacklist.isEmpty() && fieldsBlacklist.contains(field.name())) {
+					continue;
+				}
 				nonKeyFieldNames.add(field.name());
 
 				final Schema fieldSchema = field.schema();
