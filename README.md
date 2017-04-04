@@ -12,6 +12,8 @@ Motivation: explore CDC scenarios between RDBMS (for example Oracle) and NoSQL s
 - ~~Add configuration for INSERT, UPDATE, DELETE operations (i.e. op_type='I', etc.)~~
 - ~~Complete functionality to actually perform the selected operation on the Cassandra backend~~
 - Testing, testing, testing, testing (and unit tests... but how to do this emulating Oracle or other DBs???)
+- Add tests for various data types
+- Simplify the code by going directly from Kafka Connect messages to Cassandra APIs
 
 # Development
 
